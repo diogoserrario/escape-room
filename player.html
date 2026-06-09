@@ -30,7 +30,7 @@
       --accent:#0ea5e9;--accent-light:#7dd3fc;--accent-dim:#075985;
       --accent2:#34d399;--theme-bg:#03111e;--theme-surface:#071e33;
     }
-    html,body{height:100%;margin:0;padding:0}
+    html{height:100%}
     body{
       font-family:'Nunito','Segoe UI',sans-serif;
       background:var(--bg);
@@ -40,6 +40,7 @@
       color:var(--text);
       display:flex;flex-direction:column;
       min-height:100vh;
+      min-height:-webkit-fill-available;
       min-height:100dvh;
     }
 
@@ -322,13 +323,13 @@
     </div>
   </div>
 </div>
-<div id="progress-bar">
+<div id="progress-bar" style="display:none">
   <div id="prog-label">Pistas concluídas: 0 / 6</div>
   <div id="prog-track"><div id="prog-fill" style="width:0%"></div></div>
 </div>
 
 <main>
-  <div class="map-wrap" id="map-wrap">
+  <div class="map-wrap" id="map-wrap" style="display:none">
     <div id="map"></div>
   </div>
   <div id="map-next-card" class="map-next-card" style="display:none">
@@ -340,7 +341,7 @@
   </div>
 </main>
 
-<footer>Escape Room v3 · PWA · 6 tipos de puzzle</footer>
+<footer id="main-footer" style="display:none">Escape Room v3 · PWA · 6 tipos de puzzle</footer>
 
 <div id="completion">
   <div class="stars">🧜‍♀️✨🐚</div>
@@ -1674,12 +1675,13 @@ function startGame(withGPS){
 
   if(devMode){
     queueScreens('before:0', ()=>{
+      showGameUI();
       unlockNextForTest();
       const first = state.puzzleSolved.findIndex(v=>!v);
       showPuzzleOverlay(first >= 0 ? first : 0);
     });
   } else {
-    queueScreens('before:0', ()=>{ initMap(); render(); });
+    queueScreens('before:0', ()=>{ showGameUI(); initMap(); render(); });
   }
   if(withGPS && 'geolocation' in navigator){
     navigator.geolocation.watchPosition(onPos,onPosErr,{enableHighAccuracy:true,maximumAge:5000,timeout:15000});
@@ -1687,6 +1689,16 @@ function startGame(withGPS){
     document.getElementById('gps-pill').textContent='GPS não suportado';
     document.getElementById('gps-pill').className='gps-err';
   }
+}
+
+// ── Mostrar UI do jogo (map, progress, footer) ───────
+function showGameUI(){
+  document.getElementById('map-wrap').style.display = '';
+  document.getElementById('progress-bar').style.display = '';
+  const f = document.getElementById('main-footer');
+  if(f) f.style.display = '';
+  // Notificar Leaflet que o contentor ficou visível
+  setTimeout(()=>{ if(leafletMap) leafletMap.invalidateSize(); }, 50);
 }
 
 // ── Reset game ────────────────────────────────────────
@@ -1937,6 +1949,8 @@ function initMap(){
 }
 
 function renderMap(){
+  const mw = document.getElementById('map-wrap');
+  if(!mw || mw.style.display === 'none') return; // mapa ainda não visível
   if(!leafletMap) initMap();
 
   const t = state.currentTarget;
