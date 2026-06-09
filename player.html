@@ -904,32 +904,7 @@ let GAME = {
     }
   ]
 };
-let deferredPrompt = null;
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js').catch(()=>{});
-}
-window.addEventListener('beforeinstallprompt', e => {
-  e.preventDefault(); deferredPrompt = e;
-  document.getElementById('install-banner').classList.add('show');
-});
-window.addEventListener('appinstalled', () => {
-  document.getElementById('install-banner').classList.remove('show');
-  deferredPrompt = null;
-});
-document.getElementById('install-btn').addEventListener('click', async () => {
-  if (!deferredPrompt) return;
-  deferredPrompt.prompt();
-  await deferredPrompt.userChoice;
-  deferredPrompt = null;
-  document.getElementById('install-banner').classList.remove('show');
-});
-function dismissInstall() {
-  document.getElementById('install-banner').classList.remove('show');
-  if (isIOS() && !isStandalone()) document.getElementById('ios-hint').classList.add('show');
-}
-function isIOS(){ return /iphone|ipad|ipod/i.test(navigator.userAgent); }
-function isStandalone(){ return navigator.standalone || window.matchMedia('(display-mode:standalone)').matches; }
-if (isIOS() && !isStandalone() && !localStorage.getItem('ios-shown')) {
+if ((/iphone|ipad|ipod/i.test(navigator.userAgent)) && !(navigator.standalone || window.matchMedia('(display-mode:standalone)').matches) && !localStorage.getItem('ios-shown')) {
   setTimeout(() => { document.getElementById('ios-hint').classList.add('show'); localStorage.setItem('ios-shown','1'); }, 3000);
 }
 
@@ -964,7 +939,7 @@ function persist() {
     console.warn('persist() failed:', e);
   }
 }
-function resetGame(){ localStorage.removeItem('er_v3'); location.reload(); }
+function resetGame(){ try{ stopAllAudio(); }catch(e){} if(globalMusic){ globalMusic.pause(); globalMusic.src=''; globalMusic=null; } localStorage.removeItem('er_v3'); location.reload(); }
 
 // ══════════════════════════════════════════════════════════
 //  UTILS
@@ -1573,6 +1548,9 @@ function showNextScreen(){
   document.getElementById('sc-text').innerHTML = nl2br(s.text||'');
   document.getElementById('sc-btn').textContent = s.btnLabel||'Continuar ▶';
 
+  // Stop previous audio BEFORE inserting new media
+  stopAllAudio();
+
   const media = document.getElementById('sc-media');
   const caption = document.getElementById('sc-caption');
   media.style.display='none'; caption.style.display='none'; media.innerHTML='';
@@ -1593,7 +1571,6 @@ function showNextScreen(){
     media.style.display='block';
   }
   // Play additional audio tracks
-  stopAllAudio();
   (s.audioTracks||[]).forEach(t=>{
     if(!t.src) return;
     const a = new Audio(t.src);
@@ -1717,22 +1694,8 @@ function confirmReset(){
   document.getElementById('reset-modal').style.display='flex';
 }
 function doReset(){
-  // Stop any audio
   try { stopAllAudio(); } catch(e){}
-  // Clear all saved state
-  localStorage.clear();
-  // Unregister service worker cache then reload
-  if('serviceWorker' in navigator){
-    navigator.serviceWorker.getRegistrations().then(regs=>{
-      Promise.all(regs.map(r=>r.unregister())).then(()=>{
-        caches.keys().then(keys=>Promise.all(keys.map(k=>caches.delete(k)))).then(()=>{
-          location.reload();
-        });
-      });
-    });
-  } else {
-    location.reload();
-  }
+  resetGame();
 }
 
 // ── Dev mode toggle (during game) ─────────────────────
@@ -2116,47 +2079,45 @@ function loadFromFile(ev){
       applyTheme();
       showModeScreen();
     } catch(err){
-      alert('Ficheiro inválido: ' + err.message);
+      alert('Ficheiro invalido: ' + err.message);
     }
   };
   reader.readAsText(file);
 }
 
-// ══════════════════════════════════════════════════════════
-// BOOT
-// ══════════════════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded', () => {
   loadConfig();
-
-  // Service worker registration
   if('serviceWorker' in navigator){
     navigator.serviceWorker.register('./sw.js').catch(()=>{});
   }
-
-  // PWA install banner
   let deferredPrompt = null;
   window.addEventListener('beforeinstallprompt', e => {
     e.preventDefault();
     deferredPrompt = e;
     document.getElementById('install-banner').classList.add('show');
   });
-  document.getElementById('install-btn').addEventListener('click', async () => {
-    if(!deferredPrompt) return;
-    deferredPrompt.prompt();
-    const {outcome} = await deferredPrompt.userChoice;
-    deferredPrompt = null;
-    dismissInstall();
-  });
-
-  // iOS hint
+  const installBtn = document.getElementById('install-btn');
+  if(installBtn){
+    installBtn.addEventListener('click', async () => {
+      if(!deferredPrompt) return;
+      deferredPrompt.prompt();
+      const {outcome} = await deferredPrompt.userChoice;
+      deferredPrompt = null;
+      dismissInstall();
+    });
+  }
   const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.navigator.standalone;
   if(isIOS){
-    setTimeout(()=>{ document.getElementById('ios-hint').classList.add('show'); }, 3000);
+    setTimeout(()=>{
+      const hint = document.getElementById('ios-hint');
+      if(hint) hint.classList.add('show');
+    }, 3000);
   }
 });
 
 function dismissInstall(){
-  document.getElementById('install-banner').classList.remove('show');
+  const b = document.getElementById('install-banner');
+  if(b) b.classList.remove('show');
 }
 </script>
 </body>
